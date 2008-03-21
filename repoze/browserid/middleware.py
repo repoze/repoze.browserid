@@ -12,46 +12,89 @@
 #
 ##############################################################################
 
+import hmac
+import os
 import random
-import sys
 import StringIO
-import struct
+import sha
 import time
+import threading
 
 from paste.request import get_cookies
 
+_RANDS = []
+_CURRENT_PERIOD = None
+_LOCK = threading.Lock()
+
 class BrowserIdMiddleware(object):
+
     def __init__(self, app,
+                 secret_key,
                  cookie_name,
                  cookie_path='/',
                  cookie_domain=None,
                  cookie_lifetime=None,
-                 cookie_secure=False):
+                 cookie_secure=False,
+                 vary=(),
+                 ):
 
         self.app = app
+        self.secret_key = secret_key
         self.cookie_name = cookie_name
         self.cookie_path = cookie_path
         self.cookie_domain = cookie_domain
         self.cookie_lifetime = cookie_lifetime
         self.cookie_secure = cookie_secure
+        self.vary = vary
+        self.randint = random.randint # for testing
+        self.time = time.time # for testing
+        try:
+            self.pid = os.getpid()
+        except AttributeError:
+            # no getpid in Jython
+            self.pid = 1
 
-    def __call__(self, environ, start_response, time=time, random=random):
+    def __call__(self, environ, start_response):
+        """
+        If the remote browser has a cookie with a browser id value,
+        and the value hasn't been tampered with, set the value as
+        'repoze.browserid' in the environ and call the downstream
+        application.
+
+        Otherwise, create one and set that as 'repoze.browserid' in
+        the environ, then call the downstream application.  On egress,
+        set a Set-Cookie header with the value so we can retrieve it
+        next time around.
+
+        We use the secret key and the values in self.vary to compose
+        the 'tamper key' when creating a browser id.  This allows a
+        configurer to vary the tamper key on, e.g. 'REMOTE_ADDR' if he
+        believes that the same browser id should always be sent from
+        the same IP address, or 'HTTP_USER_AGENT' if he believes it
+        should always come from the same user agent, or some arbitrary
+        combination thereof made out of environ keys.
+        """
         cookies = get_cookies(environ)
         cookie = cookies.get(self.cookie_name)
         if cookie is not None:
             # this browser already has an id
-            return self.app(environ, start_response)
-            
+            browser_id = cookie.value
+            if not self.tampered(environ, browser_id):
+                environ['repoze.browserid'] = browser_id
+                return self.app(environ, start_response)
+
+        now = self.time()
+        browser_id = self.make_browser_id(now, environ)
+        environ['repoze.browserid'] = browser_id
         wrapper = StartResponseWrapper(start_response)
         app_iter = self.app(environ, wrapper.wrap_start_response)
-        browser_id = make_browser_id(time, random)
         set_cookie = '%s=%s; ' % (self.cookie_name, browser_id)
         if self.cookie_path:
             set_cookie += 'Path=%s; ' % self.cookie_path
         if self.cookie_domain:
             set_cookie += 'Domain=%s; ' % self.cookie_domain
         if self.cookie_lifetime:
-            expires = time.gmtime(time.time() + self.cookie_lifetime)
+            expires = time.gmtime(now + self.cookie_lifetime)
             expires = time.strftime('%a %d-%b-%Y %H:%M:%S GMT', expires)
             set_cookie += 'Expires=%s; ' % expires
         if self.cookie_secure:
@@ -59,44 +102,69 @@ class BrowserIdMiddleware(object):
         wrapper.finish_response([('Set-Cookie', set_cookie)])
         return app_iter
 
-def make_browser_id(time=time, random=random):
-    """ Returns 40-character string browser id
-    'AAAAAAAABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
-    where:
+    def _get_tamper_key(self, environ):
+        key = self.secret_key
+        for name in self.vary:
+            key = key + environ.get(name, '')
+        return key
 
-    A == 8-byte string representation of random integer
-    B == 32-byte hex representation of a timetime value
+    def tampered(self, environ, browser_id):
+        try:
+            component, provided_h = browser_id.split('!')
+        except ValueError:
+            return True
+        key = self._get_tamper_key(environ)
+        computed_h = hmac.new(key, component).hexdigest()
+        return computed_h != provided_h
 
-    An example is: 0000000047e0d7e3000000006468f3ff
-    """
-    rand = random.randint(0, 99999999)
-    stamp = make_timestamp(time)
-    browser_id = '%08i%s' % (rand, stamp)
-    return browser_id
+    def make_browser_id(self, when, environ):
+        """ Returns opaque browser id
 
-def time_from_browser_id(browser_id):
-    stamp = browser_id[8:]
-    return timestamp_to_time(stamp)
-        
-def make_timestamp(time=time):
-    now = time.time()
-    int_part = int(now)
-    frac_part = int((now - int_part) * sys.maxint)
-    stamp = struct.pack(">QQ", int_part, frac_part).encode('hex')
-    return stamp
+        An example is: XXX
+        """
+        rand = self.get_rand_for(when)
+        source = '%s%s%s' % (rand, when, self.pid)
+        component = sha.new(source).hexdigest()
+        key = self._get_tamper_key(environ)
+        h = hmac.new(key, component).hexdigest()
+        browser_id = '%s!%s' % (component, h)
+        return browser_id
 
-def timestamp_to_time(stamp):
-    try:
-        binary = stamp.decode('hex')
-    except TypeError:
-        return None
-    try:
-        int_part, frac_part = struct.unpack('>QQ', binary)
-    except struct.error:
-        return None
-    frac_part = float(frac_part / sys.maxint)
-    time = int_part + frac_part
-    return time
+    def get_rand_for(self, when):
+        """
+        There is a good chance that two simultaneous callers will
+        obtain the same random number when the system first starts, as
+        all Python threads/interpreters will start with the same
+        random seed (the time) when they come up on platforms that
+        dont have an entropy generator.
+
+        We'd really like to be sure that two callers never get the
+        same browser id, so this is a problem.  But since our browser
+        id has a time component and a random component, the random
+        component only needs to be unique within the resolution of the
+        time component to ensure browser id uniqueness.
+
+        We keep around a set of recently-generated random numbers at a
+        global scope for the past second, only returning numbers that
+        aren't in this set.  The lowest-known-resolution time.time
+        timer is on Windows, which changes 18.2 times per second, so
+        using a period of one second should be conservative enough.
+        """
+        period = 1
+        this_period = int(when - (when % period))
+        _LOCK.acquire()
+        try:
+            while 1:
+                rand = self.randint(0, 99999999)
+                global _CURRENT_PERIOD
+                if this_period != _CURRENT_PERIOD:
+                    _CURRENT_PERIOD = this_period
+                    _RANDS[:] = []
+                if rand not in _RANDS:
+                    _RANDS.append(rand)
+                    return rand
+        finally:
+            _LOCK.release()
 
 class StartResponseWrapper(object):
     def __init__(self, start_response):
@@ -124,3 +192,4 @@ class StartResponseWrapper(object):
                 write(value)
             if hasattr(write, 'close'):
                 write.close()
+
