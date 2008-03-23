@@ -57,23 +57,25 @@ class BrowserIdMiddleware(object):
 
     def __call__(self, environ, start_response):
         """
-        If the remote browser has a cookie with a browser id value,
-        and the value hasn't been tampered with, set the value as
+        If the remote browser has a cookie that claims to contain a
+        browser id value, and that value hasn't been tampered with,
+        set the browser id portion of the cookie value as
         'repoze.browserid' in the environ and call the downstream
         application.
 
         Otherwise, create one and set that as 'repoze.browserid' in
         the environ, then call the downstream application.  On egress,
-        set a Set-Cookie header with the value so we can retrieve it
-        next time around.
+        set a Set-Cookie header with the value+hmac so we can retrieve
+        it next time around.
 
         We use the secret key and the values in self.vary to compose
-        the 'tamper key' when creating a browser id.  This allows a
-        configurer to vary the tamper key on, e.g. 'REMOTE_ADDR' if he
-        believes that the same browser id should always be sent from
-        the same IP address, or 'HTTP_USER_AGENT' if he believes it
-        should always come from the same user agent, or some arbitrary
-        combination thereof made out of environ keys.
+        the 'tamper key' when creating a browser id, which is used as
+        the hmac key.  This allows a configurer to vary the tamper key
+        on, e.g. 'REMOTE_ADDR' if he believes that the same browser id
+        should always be sent from the same IP address, or
+        'HTTP_USER_AGENT' if he believes it should always come from
+        the same user agent, or some arbitrary combination thereof
+        made out of environ keys.
         """
         cookies = get_cookies(environ)
         cookie = cookies.get(self.cookie_name)
