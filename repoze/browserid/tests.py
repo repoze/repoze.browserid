@@ -1,15 +1,15 @@
 import unittest
 
-_DEFAULT_BID = """\
-e193a01ecf8d30ad0affefd332ce934e32ffce72!1f2115dde0ba7312bdc94942e227666c
-"""
-
+_DEFAULT_BID = "e193a01ecf8d30ad0affefd332ce934e32ffce72"
+_DEFAULT_COOKIE = "%s!1f2115dde0ba7312bdc94942e227666c" % _DEFAULT_BID
 # see the "d" at the end?
-_BAD_BID = """\
-e193a01ecf8d30ad0affefd332ce934e32ffce72!1f2115dde0ba7312bdc94942e227666d
-"""
+_BAD_COOKIE = "%s!1f2115dde0ba7312bdc94942e227666d" % _DEFAULT_BID
 
 class TestBrowserIdMiddleware(unittest.TestCase):
+    _RANDINT = lambda *arg: 0
+    _TIME = lambda *arg: 0
+    _PID = 1
+
     def _getTargetClass(self):
         from repoze.browserid.middleware import BrowserIdMiddleware
         return BrowserIdMiddleware
@@ -22,22 +22,26 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         self.status = None
         self.exc_info = None
 
-    def _assertBrowserId(self, browser_id,
-                        rand=0, when=0, pid=1, secret='secret'):
+    def _assertBrowserId(self, browser_id):
         import sha
+        computed = '%s%s%s' % (self._RANDINT(), self._TIME(), self._PID)
+        computed = sha.new(computed).hexdigest()
+        self.assertEqual(browser_id, computed)
+
+    def _assertCookieVal(self, cookie_val, secret='secret'):
+        browser_id, provided_hmac = cookie_val.split('!')
         import hmac
-        component = '%s%s%s' % (rand, when, pid)
-        component = sha.new(component).hexdigest()
-        hmac = hmac.new(secret, component).hexdigest()
-        self.assertEqual(browser_id, '%s!%s' % (component, hmac))
+        computed_hmac = hmac.new(secret, browser_id).hexdigest()
+        self.assertEqual(cookie_val, '%s!%s' % (browser_id, computed_hmac))
+        self._assertBrowserId(browser_id)
 
     def _makeOne(self, *arg, **kw):
         klass = self._getTargetClass()
         app = DummyApp()
         mw = klass(app, *arg, **kw)
-        mw.randint = lambda *arg: 0
-        mw.time = lambda *arg: 0
-        mw.pid = 1
+        mw.randint = self._RANDINT
+        mw.time = self._TIME
+        mw.pid = self._PID
         return mw
 
     def _start_response(self, status, headers, exc_info=None):
@@ -60,7 +64,7 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         cookie_val, path = self._get_cookie_components(header_val)
         name, cookie = cookie_val.split('=')
         self.assertEqual(name, 'thecookiename')
-        self._assertBrowserId(cookie)
+        self._assertCookieVal(cookie)
         self.assertEqual(path, 'Path=/')
         self.assertEqual(app_iter, [])
 
@@ -76,7 +80,7 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         cookie_val, path = self._get_cookie_components(header_val)
         name, cookie = cookie_val.split('=')
         self.assertEqual(name, 'thecookiename')
-        self._assertBrowserId(cookie)
+        self._assertCookieVal(cookie)
         self.assertEqual(path, 'Path=/subpath')
         self.assertEqual(app_iter, [])
 
@@ -92,7 +96,7 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         cookie_val, path, domain = self._get_cookie_components(header_val)
         name, cookie = cookie_val.split('=')
         self.assertEqual(name, 'thecookiename')
-        self._assertBrowserId(cookie)
+        self._assertCookieVal(cookie)
         self.assertEqual(path, 'Path=/')
         self.assertEqual(domain, 'Domain=repoze.org')
         self.assertEqual(app_iter, [])
@@ -110,7 +114,7 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         cookie_val, path, expiresh = self._get_cookie_components(header_val)
         name, cookie = cookie_val.split('=')
         self.assertEqual(name, 'thecookiename')
-        self._assertBrowserId(cookie)
+        self._assertCookieVal(cookie)
         self.assertEqual(path, 'Path=/')
         import time
         expires = time.gmtime(lifetime)
@@ -130,45 +134,67 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         cookie_val, path, secure = self._get_cookie_components(header_val)
         name, cookie = cookie_val.split('=')
         self.assertEqual(name, 'thecookiename')
-        self._assertBrowserId(cookie)
+        self._assertCookieVal(cookie)
         self.assertEqual(path, 'Path=/')
         self.assertEqual(secure, 'Secure')
         self.assertEqual(app_iter, [])
 
     def test_defaults_withcookie_untampered(self):
         middleware = self._makeOne('secret', 'thecookiename')
-        environ = {'HTTP_COOKIE':'thecookiename=%s; Path=/;' % _DEFAULT_BID}
+        environ = {'HTTP_COOKIE':'thecookiename=%s; Path=/;' % _DEFAULT_COOKIE}
         result = middleware(environ, self._start_response)
         self.assertEqual(self.headers, [])
         self.assertEqual(result, [])
+        self.assertEqual(environ['repoze.browserid'], _DEFAULT_BID)
 
     def test_defaults_withcookie_tampered_badformat(self):
         middleware = self._makeOne('secret', 'thecookiename')
+        middleware.pid = 2 # for varying _DEFAULT_BID
         environ = {'HTTP_COOKIE':'thecookiename=bad; Path=/;'}
         result = middleware(environ, self._start_response)
         # headers were set because the format of the browser id was bad
         self.assertEqual(len(self.headers), 1)
         self.assertEqual(result, [])
+        self.assertNotEqual(environ['repoze.browserid'], _DEFAULT_BID)
 
     def test_defaults_withcookie_tampered_badhmac(self):
         middleware = self._makeOne('secret', 'thecookiename')
-        environ = {'HTTP_COOKIE':'thecookiename=%s; Path=/;' % _BAD_BID}
+        environ = {'HTTP_COOKIE':'thecookiename=%s; Path=/;' % _BAD_COOKIE}
         result = middleware(environ, self._start_response)
         # headers were set because the hmac of the browser id was wrong
         self.assertEqual(len(self.headers), 1)
         self.assertEqual(result, [])
+        self.assertEqual(environ['repoze.browserid'], _DEFAULT_BID)
 
-    def test_make_browser_id(self):
+    def test_new(self):
         middleware = self._makeOne('secret', 'thecookiename')
-        browser_id = middleware.make_browser_id(0, {})
+        browser_id = middleware.new(0)
         self._assertBrowserId(browser_id)
 
-    def test_make_browser_id_vary(self):
+    def test_to_cookieval_vary(self):
         middleware = self._makeOne('secret', 'thecookiename')
         middleware.vary = ('REMOTE_ADDR', 'HTTP_USER_AGENT', 'NONEXISTENT')
         environ = {'REMOTE_ADDR':'127.0.0.1', 'HTTP_USER_AGENT':'Fluzbox'}
-        browser_id = middleware.make_browser_id(0, environ)
-        self._assertBrowserId(browser_id, secret='secret127.0.0.1Fluzbox')
+        browser_id = middleware.new(0)
+        cookie_val = middleware.to_cookieval(environ, browser_id)
+        self._assertCookieVal(cookie_val, secret='secret127.0.0.1Fluzbox')
+
+    def test_from_cookieval_vary(self):
+        middleware = self._makeOne('secret', 'thecookiename')
+        middleware.vary = ('REMOTE_ADDR', 'HTTP_USER_AGENT', 'NONEXISTENT')
+        environ = {'REMOTE_ADDR':'127.0.0.1', 'HTTP_USER_AGENT':'Fluzbox'}
+        tamper_key = 'secret127.0.0.1Fluzbox'
+        import hmac
+        h = hmac.new(tamper_key, _DEFAULT_BID).hexdigest()
+        cookieval = '%s!%s' % (_DEFAULT_BID, h)
+        browser_id = middleware.from_cookieval(environ, cookieval)
+        self._assertBrowserId(browser_id)
+
+    def test_from_cookieval_bad(self):
+        middleware = self._makeOne('secret', 'thecookiename')
+        cookieval = 'badcookie'
+        browser_id = middleware.from_cookieval({}, cookieval)
+        self.assertEqual(browser_id, None)
 
 class TestStartResponseWrapper(unittest.TestCase):
     def _getTargetClass(self):

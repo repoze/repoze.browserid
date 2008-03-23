@@ -26,6 +26,7 @@ _RANDS = []
 _CURRENT_PERIOD = None
 _LOCK = threading.Lock()
 
+
 class BrowserIdMiddleware(object):
 
     def __init__(self, app,
@@ -46,8 +47,8 @@ class BrowserIdMiddleware(object):
         self.cookie_lifetime = cookie_lifetime
         self.cookie_secure = cookie_secure
         self.vary = vary
-        self.randint = random.randint # for testing
-        self.time = time.time # for testing
+        self.randint = random.randint # tests override
+        self.time = time.time # tests override
         try:
             self.pid = os.getpid()
         except AttributeError:
@@ -77,18 +78,22 @@ class BrowserIdMiddleware(object):
         cookies = get_cookies(environ)
         cookie = cookies.get(self.cookie_name)
         if cookie is not None:
-            # this browser already has an id
-            browser_id = cookie.value
-            if not self.tampered(environ, browser_id):
+            # this browser returned a cookie value that claims to be
+            # a browser id
+            browser_id = self.from_cookieval(environ, cookie.value)
+            if browser_id is not None:
+                # cookie hasn't been tampered with
                 environ['repoze.browserid'] = browser_id
                 return self.app(environ, start_response)
 
+        # no browser id cookie or cookie value was tampered with
         now = self.time()
-        browser_id = self.make_browser_id(now, environ)
+        browser_id = self.new(now)
         environ['repoze.browserid'] = browser_id
         wrapper = StartResponseWrapper(start_response)
         app_iter = self.app(environ, wrapper.wrap_start_response)
-        set_cookie = '%s=%s; ' % (self.cookie_name, browser_id)
+        cookie_value = self.to_cookieval(environ, browser_id)
+        set_cookie = '%s=%s; ' % (self.cookie_name, cookie_value)
         if self.cookie_path:
             set_cookie += 'Path=%s; ' % self.cookie_path
         if self.cookie_domain:
@@ -102,35 +107,40 @@ class BrowserIdMiddleware(object):
         wrapper.finish_response([('Set-Cookie', set_cookie)])
         return app_iter
 
+    def from_cookieval(self, environ, cookie_value):
+        try:
+            browser_id, provided_hmac = cookie_value.split('!')
+        except ValueError:
+            return None
+        key = self._get_tamper_key(environ)
+        computed_hmac = hmac.new(key, browser_id).hexdigest()
+        if computed_hmac != provided_hmac:
+            return None
+        return browser_id
+
+    def to_cookieval(self, environ, browser_id):
+        key = self._get_tamper_key(environ)
+        h = hmac.new(key, browser_id).hexdigest()
+        val = '%s!%s' % (browser_id, h)
+        return val
+
     def _get_tamper_key(self, environ):
         key = self.secret_key
         for name in self.vary:
             key = key + environ.get(name, '')
         return key
 
-    def tampered(self, environ, browser_id):
-        try:
-            component, provided_h = browser_id.split('!')
-        except ValueError:
-            return True
-        key = self._get_tamper_key(environ)
-        computed_h = hmac.new(key, component).hexdigest()
-        return computed_h != provided_h
-
-    def make_browser_id(self, when, environ):
-        """ Returns opaque browser id
+    def new(self, when):
+        """ Returns opaque 40-character browser id
 
         An example is: XXX
         """
-        rand = self.get_rand_for(when)
+        rand = self._get_rand_for(when)
         source = '%s%s%s' % (rand, when, self.pid)
-        component = sha.new(source).hexdigest()
-        key = self._get_tamper_key(environ)
-        h = hmac.new(key, component).hexdigest()
-        browser_id = '%s!%s' % (component, h)
+        browser_id = sha.new(source).hexdigest()
         return browser_id
 
-    def get_rand_for(self, when):
+    def _get_rand_for(self, when):
         """
         There is a good chance that two simultaneous callers will
         obtain the same random number when the system first starts, as
@@ -165,6 +175,7 @@ class BrowserIdMiddleware(object):
                     return rand
         finally:
             _LOCK.release()
+
 
 class StartResponseWrapper(object):
     def __init__(self, start_response):
