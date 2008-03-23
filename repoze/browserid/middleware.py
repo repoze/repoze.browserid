@@ -133,7 +133,7 @@ class BrowserIdMiddleware(object):
     def new(self, when):
         """ Returns opaque 40-character browser id
 
-        An example is: XXX
+        An example is: e193a01ecf8d30ad0affefd332ce934e32ffce72
         """
         rand = self._get_rand_for(when)
         source = '%s%s%s' % (rand, when, self.pid)
