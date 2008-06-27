@@ -23,22 +23,24 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.txt')).read()
+CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 setup(name='repoze.browserid',
       version=__version__,
-      description=('repoze.browserid is a browser identification system for '
-                   'WSGI.'),
-      long_description=README,
+      description=('repoze.browserid WSGI middleware tags browsers with an '
+                   'identifier cookie for use in sessioning and other'
+                   'browser-identity-sensitive systems.'),
+      long_description=README + '\n\n' + CHANGES,
       classifiers=[
-        "Development Status :: 1 - Planning",
+        "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Programming Language :: Python",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Internet :: WWW/HTTP :: WSGI",
-        "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
+        "Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware",
         ],
-      keywords='web application server wsgi zope',
+      keywords='application server wsgi middleware sessions browserid',
       author="Agendaless Consulting",
       author_email="repoze-dev@lists.repoze.org",
       url="http://www.repoze.org",
@@ -51,6 +53,8 @@ setup(name='repoze.browserid',
       install_requires=['Paste'],
       test_suite="repoze.browserid.tests",
       entry_points = """\
+        [paste.filter_app_factory]
+        browserid = repoze.browserid.middleware:make_middleware
       """
       )
 

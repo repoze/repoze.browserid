@@ -240,6 +240,31 @@ class TestStartResponseWrapper(unittest.TestCase):
         self.assertEqual(datases[0], 'written')
         self.assertEqual(closededs[0], True)
 
+class TestMakeMiddleware(unittest.TestCase):
+    def _getFUT(self):
+        from repoze.browserid.middleware import make_middleware
+        return make_middleware
+
+    def test_defaults(self):
+        f = self._getFUT()
+        mw = f(None, None, 'secret')
+        self.assertEqual(mw.secret_key, 'secret')
+        self.assertEqual(mw.vary, ())
+
+    def test_overrides(self):
+        f = self._getFUT()
+        mw = f(None, None, 'secret', cookie_name='jar',
+               cookie_path='/foo', cookie_domain='.foo.com',
+               cookie_lifetime = '10',
+               cookie_secure = 'true',
+               )
+        self.assertEqual(mw.secret_key, 'secret')
+        self.assertEqual(mw.vary, ())
+        self.assertEqual(mw.cookie_name, 'jar')
+        self.assertEqual(mw.cookie_path, '/foo')
+        self.assertEqual(mw.cookie_lifetime, 10)
+        self.assertEqual(mw.cookie_secure, True)
+
 class DummyTime:
     def __init__(self, timetime, gmtime=None, strftime=None):
         self._timetime = timetime

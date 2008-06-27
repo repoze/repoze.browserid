@@ -206,3 +206,27 @@ class StartResponseWrapper(object):
             if hasattr(write, 'close'):
                 write.close()
 
+def asbool(val):
+    if isinstance(val, bool):
+        return val
+    val= str(val)
+    if val.lower() in ('y', 'yes', 'true', 't'):
+        return True
+    return False
+
+def make_middleware(app, global_conf, secret_key,
+                    cookie_name='repoze.browserid',
+                    cookie_path='/', cookie_domain=None,
+                    cookie_lifetime=None, cookie_secure=False,
+                    vary=None):
+    if cookie_lifetime:
+        cookie_lifetime = int(cookie_lifetime)
+    cookie_secure = asbool(cookie_secure)
+    if vary:
+      vary = tuple([ x.strip() for x in vary.split() ])
+    else:
+        vary = ()
+    return BrowserIdMiddleware(app, secret_key, cookie_name, cookie_path,
+                              cookie_domain, cookie_lifetime, cookie_secure,
+                              vary)
+    
