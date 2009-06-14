@@ -51,7 +51,7 @@ class BrowserIdMiddleware(object):
         self.time = time.time # tests override
         try:
             self.pid = os.getpid()
-        except AttributeError:
+        except AttributeError: # pragma: no cover
             # no getpid in Jython
             self.pid = 1
 
@@ -207,8 +207,8 @@ class StartResponseWrapper(object):
                 write.close()
 
 def asbool(val):
-    if isinstance(val, bool):
-        return val
+    if isinstance(val, int):
+        return bool(val)
     val= str(val)
     if val.lower() in ('y', 'yes', 'true', 't'):
         return True

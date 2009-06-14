@@ -211,7 +211,7 @@ class TestStartResponseWrapper(unittest.TestCase):
         self.assertEqual(wrapper.headers, [])
         self.failUnless(wrapper.buffer)
     
-    def test_finish_response(self):
+    def test_finish_response_extraheaders(self):
         statuses = []
         headerses = []
         datases = []
@@ -240,6 +240,34 @@ class TestStartResponseWrapper(unittest.TestCase):
         self.assertEqual(datases[0], 'written')
         self.assertEqual(closededs[0], True)
 
+    def test_finish_response_noextraheaders(self):
+        statuses = []
+        headerses = []
+        datases = []
+        closededs = []
+        from StringIO import StringIO
+        def write(data):
+            datases.append(data)
+        def close():
+            closededs.append(True)
+        write.close = close
+            
+        def start_response(status, headers, exc_info=None):
+            statuses.append(status)
+            headerses.append(headers)
+            return write
+            
+        wrapper = self._makeOne(start_response)
+        wrapper.status = '401 Unauthorized'
+        wrapper.headers = [('a', '1')]
+        wrapper.buffer = StringIO('written')
+        result = wrapper.finish_response([])
+        self.assertEqual(result, None)
+        self.assertEqual(headerses[0], wrapper.headers)
+        self.assertEqual(statuses[0], wrapper.status)
+        self.assertEqual(datases[0], 'written')
+        self.assertEqual(closededs[0], True)
+
 class TestMakeMiddleware(unittest.TestCase):
     def _getFUT(self):
         from repoze.browserid.middleware import make_middleware
@@ -257,13 +285,33 @@ class TestMakeMiddleware(unittest.TestCase):
                cookie_path='/foo', cookie_domain='.foo.com',
                cookie_lifetime = '10',
                cookie_secure = 'true',
+               vary='abc'
                )
         self.assertEqual(mw.secret_key, 'secret')
-        self.assertEqual(mw.vary, ())
+        self.assertEqual(mw.vary, ('abc',))
         self.assertEqual(mw.cookie_name, 'jar')
         self.assertEqual(mw.cookie_path, '/foo')
         self.assertEqual(mw.cookie_lifetime, 10)
         self.assertEqual(mw.cookie_secure, True)
+
+class TestAsBool(unittest.TestCase):
+    def _callFUT(self, val):
+        from repoze.browserid.middleware import asbool
+        return asbool(val)
+
+    def test_bool(self):
+        self.assertEqual(self._callFUT(True), True)
+        self.assertEqual(self._callFUT(False), False)
+
+    def test_int(self):
+        self.assertEqual(self._callFUT(1), True)
+        self.assertEqual(self._callFUT(0), False)
+
+    def test_truestring(self):
+        self.assertEqual(self._callFUT('true'), True)
+
+    def test_falsestring(self):
+        self.assertEqual(self._callFUT('false'), False)
 
 class DummyTime:
     def __init__(self, timetime, gmtime=None, strftime=None):
