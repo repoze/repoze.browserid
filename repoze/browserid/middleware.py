@@ -223,7 +223,7 @@ def make_middleware(app, global_conf, secret_key,
         cookie_lifetime = int(cookie_lifetime)
     cookie_secure = asbool(cookie_secure)
     if vary:
-      vary = tuple([ x.strip() for x in vary.split() ])
+        vary = tuple([ x.strip() for x in vary.split() ])
     else:
         vary = ()
     return BrowserIdMiddleware(app, secret_key, cookie_name, cookie_path,
