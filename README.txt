@@ -81,7 +81,7 @@ Configuration via Python
 Wire up the middleware in your application::
 
  from repoze.browserid.middleware import BrowserIdMiddleware
- middleware = BrowserIdMiddleware(app, secret_key='foo,
+ middleware = BrowserIdMiddleware(app, secret_key='foo',
                                   cookie_name='repoze.browserid',
                                   cookie_path='/',
                                   cookie_domain=None,
