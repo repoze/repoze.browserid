@@ -16,10 +16,8 @@ __version__ = '0.1'
 
 import os
 
-from ez_setup import use_setuptools
-use_setuptools()
-
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.txt')).read()
