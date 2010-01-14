@@ -16,9 +16,12 @@ import hmac
 import os
 import random
 import StringIO
-import sha
 import time
 import threading
+try:
+    from hashlib import sha
+except ImportError: # Python < 2.5
+    from sha import new as sha
 
 from paste.request import get_cookies
 
@@ -139,7 +142,7 @@ class BrowserIdMiddleware(object):
         """
         rand = self._get_rand_for(when)
         source = '%s%s%s' % (rand, when, self.pid)
-        browser_id = sha.new(source).hexdigest()
+        browser_id = sha(source).hexdigest()
         return browser_id
 
     def _get_rand_for(self, when):
