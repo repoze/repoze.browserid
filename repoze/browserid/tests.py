@@ -23,9 +23,12 @@ class TestBrowserIdMiddleware(unittest.TestCase):
         self.exc_info = None
 
     def _assertBrowserId(self, browser_id):
-        import sha
+        try:
+            from hashlib import sha1 as sha
+        except ImportError:
+            from sha import new as sha
         computed = '%s%s%s' % (self._RANDINT(), self._TIME(), self._PID)
-        computed = sha.new(computed).hexdigest()
+        computed = sha(computed).hexdigest()
         self.assertEqual(browser_id, computed)
 
     def _assertCookieVal(self, cookie_val, secret='secret'):

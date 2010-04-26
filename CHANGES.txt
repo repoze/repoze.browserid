@@ -1,3 +1,9 @@
+Next release
+------------
+
+- Prevented deprecation warnings for import of the "sha" module under
+  2.6.
+
 0.2 (2010-01-14)
 ----------------
 
