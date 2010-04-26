@@ -1,0 +1,4 @@
+``repoze.browserid`` TODOs
+==========================
+
+- [_] Fix deprecation warnings for use of ``sha`` under Python 2.6.
