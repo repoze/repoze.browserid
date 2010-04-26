@@ -1,6 +1,6 @@
 ##############################################################################
 #
-# Copyright (c) 2007 Agendaless Consulting and Contributors.
+# Copyright (c) 2007-2010 Agendaless Consulting and Contributors.
 # All Rights Reserved.
 #
 # This software is subject to the provisions of the BSD-like license at
@@ -12,7 +12,7 @@
 #
 ##############################################################################
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 import os
 
@@ -30,7 +30,6 @@ setup(name='repoze.browserid',
                    'browser-identity-sensitive systems.'),
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
-        "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Programming Language :: Python",
         "Topic :: Internet :: WWW/HTTP",

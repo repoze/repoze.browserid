@@ -41,6 +41,41 @@ class BrowserIdMiddleware(object):
                  cookie_secure=False,
                  vary=(),
                  ):
+        """
+        Construct an object suitable for use as WSGI middleware that
+        implements a browser id manager.
+
+        ``app``
+           A WSGI application object. Required.
+
+        ``secret_key``
+           A string that will be used as a component of the browser id
+           tamper key. Required.
+
+        ``cookie_name``
+           The cookie name used for the browser id cookie.  Defaults
+           to ``repoze.browserid``.
+
+        ``cookie_path``
+           The cookie path used for the browser id cookie.  Defaults
+           to ``/``.
+
+        ``cookie_domain``
+           The domain of the browser id key cookie.  Defaults to ``None``,
+           meaning do not include a domain in the cookie.
+
+        ``cookie_lifetime``
+           An integer number of seconds used to compute the expires time
+           for the browser id cookie.  Defaults to ``None``, meaning
+           include no Expires time in the cookie.
+
+        ``cookie_secure``
+           Boolean.  If ``True``, set the Secure flag of the browser
+           id cookie.
+
+        ``vary``
+           A sequence of string header names on which to vary.
+        """
 
         self.app = app
         self.secret_key = secret_key
@@ -222,6 +257,46 @@ def make_middleware(app, global_conf, secret_key,
                     cookie_path='/', cookie_domain=None,
                     cookie_lifetime=None, cookie_secure=False,
                     vary=None):
+    """
+    Return an object suitable for use as WSGI middleware that
+    implements a browser id manager.  Usually used as a PasteDeploy
+    filter_app_factory callback.
+
+    ``app``
+       A WSGI application object. Required.
+
+    ``global_conf``
+       A dictionary representing global configuration (PasteDeploy).
+       Required.
+
+    ``secret_key``
+       A string that will be used as a component of the browser id
+       tamper key. Required.
+
+    ``cookie_name``
+       The cookie name used for the browser id cookie.  Defaults
+       to ``repoze.browserid``.
+
+    ``cookie_path``
+       The cookie path used for the browser id cookie.  Defaults
+       to ``/``.
+
+    ``cookie_domain``
+       The domain of the browser id key cookie.  Defaults to ``None``,
+       meaning do not include a domain in the cookie.
+
+    ``cookie_lifetime``
+       An integer number of seconds used to compute the expires time
+       for the browser id cookie.  Defaults to ``None``, meaning
+       include no Expires time in the cookie.
+
+    ``cookie_secure``
+       Boolean.  If ``true``, set the Secure flag of the browser id cookie.
+
+    ``vary``
+       A space-separated string including the header names on which to vary.
+    
+    """
     if cookie_lifetime:
         cookie_lifetime = int(cookie_lifetime)
     cookie_secure = asbool(cookie_secure)
