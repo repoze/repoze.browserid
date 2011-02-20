@@ -116,8 +116,9 @@ API Documentation
 Reporting Bugs / Development Versions
 -------------------------------------
 
-Visit http://bugs.repoze.org to report bugs.  Visit
-http://svn.repoze.org to download development or tagged versions.
+Visit https://github.com/repoze/repoze.browserid/issues to report bugs.
+Visit https://github.com/repoze/repoze.browserid to download development or
+tagged versions.
 
 Indices and tables
 ------------------
