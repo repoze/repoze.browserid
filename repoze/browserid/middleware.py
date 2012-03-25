@@ -20,7 +20,7 @@ import time
 import threading
 try:
     from hashlib import sha1 as sha
-except ImportError: # Python < 2.5
+except ImportError: #pragma NO COVER Python < 2.5
     from sha import new as sha
 
 from paste.request import get_cookies
