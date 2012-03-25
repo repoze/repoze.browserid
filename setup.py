@@ -20,8 +20,13 @@ from setuptools import find_packages
 from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = open(os.path.join(here, 'README.txt')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
+try:
+    README = open(os.path.join(here, 'README.txt')).read()
+    CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
+except IOError:
+    README = CHANGES = ''
+
+testing_extras = ['nose', 'coverage']
 
 setup(name='repoze.browserid',
       version=__version__,
@@ -32,6 +37,12 @@ setup(name='repoze.browserid',
       classifiers=[
         "Intended Audience :: Developers",
         "Programming Language :: Python",
+        "Programming Language :: Python :: 2.4",
+        "Programming Language :: Python :: 2.5",
+        "Programming Language :: Python :: 2.6",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Internet :: WWW/HTTP :: WSGI",
@@ -52,6 +63,8 @@ setup(name='repoze.browserid',
       entry_points = """\
         [paste.filter_app_factory]
         browserid = repoze.browserid.middleware:make_middleware
-      """
-      )
-
+      """,
+      extras_require = {
+        'testing': testing_extras,
+      }
+)
